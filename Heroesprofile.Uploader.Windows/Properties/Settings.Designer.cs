@@ -214,5 +214,29 @@ namespace Heroesprofile.Uploader.Windows.Properties {
                 this["ReplayPath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool TwitchExtension {
+            get {
+                return ((bool)(this["TwitchExtension"]));
+            }
+            set {
+                this["TwitchExtension"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string TwitchUploaderKey {
+            get {
+                return ((string)(this["TwitchUploaderKey"]));
+            }
+            set {
+                this["TwitchUploaderKey"] = value;
+            }
+        }
     }
 }

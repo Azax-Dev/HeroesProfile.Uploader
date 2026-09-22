@@ -53,14 +53,18 @@ namespace Heroesprofile.Uploader.Common
 
         private Replay replayData;
 
-        public LiveProcessor(bool PreMatchPage)
+        /// <summary>The Twitch extension feed. Shared across games; each lobby starts a new one.</summary>
+        public TwitchLiveSession Twitch { get; }
+
+        public LiveProcessor(bool PreMatchPage, TwitchLiveSession twitch = null)
         {
             this.PreMatchPage = PreMatchPage;
+            Twitch = twitch ?? new TwitchLiveSession();
         }
 
         public async Task StartProcessing(string battleLobbyPath)
         {
-            if (!PreMatchPage) {
+            if (!PreMatchPage && !Twitch.Enabled) {
                 return;
             }
 
@@ -80,7 +84,19 @@ namespace Heroesprofile.Uploader.Common
                 return;
             }
 
-            await runPreMatch(replayData);
+            if (PreMatchPage) {
+                await runPreMatch(replayData);
+            }
+
+            if (Twitch.Enabled) {
+                await Twitch.StartGame(replayData);
+            }
+        }
+
+        /// <summary>A .StormSave from the game in progress, for the Twitch extension.</summary>
+        public Task UpdateData(string stormSavePath)
+        {
+            return Twitch.UpdateFromStormSave(stormSavePath);
         }
 
 

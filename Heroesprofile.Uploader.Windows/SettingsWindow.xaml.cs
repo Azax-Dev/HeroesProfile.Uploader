@@ -30,6 +30,35 @@ namespace Heroesprofile.Uploader.Windows
                 PreReleasePanel.Visibility = Visibility.Visible;
             }
             RefreshReplayPathStatus();
+            TwitchKeyBox.Password = App.TwitchKey;
+        }
+
+        private void TwitchKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            App.TwitchKey = TwitchKeyBox.Password;
+            TwitchKeyStatus.Text = "";
+        }
+
+        private async void TwitchValidate_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(TwitchKeyBox.Password)) {
+                TwitchKeyStatus.Text = "Paste your uploader key first.";
+                return;
+            }
+
+            TwitchValidateButton.IsEnabled = false;
+            TwitchKeyStatus.Text = "Checking...";
+            try {
+                TwitchKeyStatus.Text = await TwitchLiveSession.Validate(TwitchKeyBox.Password);
+            }
+            finally {
+                TwitchValidateButton.IsEnabled = true;
+            }
+        }
+
+        private void TwitchPortal_Click(object sender, RoutedEventArgs e)
+        {
+            System.Diagnostics.Process.Start("https://www.heroesprofile.com/Api/Account#twitch");
         }
 
         /// <summary>

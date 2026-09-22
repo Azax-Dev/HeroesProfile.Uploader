@@ -63,6 +63,9 @@
                 <CheckBox IsChecked="{Binding App.Settings.MinimizeToTray}" Content="Minimize to tray" Height="23"  />
                 <CheckBox IsChecked="{Binding App.Settings.PreMatchPage}" Content="Prematch Page" Height="23"  Margin="0,0,8,0" IsEnabled="True"  />
                 <CheckBox IsChecked="{Binding App.Settings.PostMatchPage}" Content="Postmatch Page" Height="23"  Margin="0,0,8,0" IsEnabled="True"  />
+                <CheckBox IsChecked="{Binding App.Settings.TwitchExtension}" Content="Twitch Extension (Beta)" Height="23" Margin="0,0,8,0"
+                          ToolTip="Show your viewers your lobby, heroes and talents live. Set your uploader key in Settings." />
+                <TextBlock Text="{Binding App.TwitchStatus}" FontSize="10" TextWrapping="Wrap" MaxWidth="160" Foreground="{StaticResource DimmedTextBrush}" />
                 <Button HorizontalAlignment="Stretch" Content="Settings" Click="Settings_Click" Margin="0, 8, 0, 0"
                         ToolTip="Replay folder, webhook and theme" />
                 <Button HorizontalAlignment="Stretch" Content="Show log" Click="ShowLog_Click" Margin="0, 4, 0, 0" />
