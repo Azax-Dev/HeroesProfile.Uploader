@@ -52,9 +52,9 @@
         </StackPanel>
 
         <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" Margin="20" helpers:MarginSetter.Margin="0, 8, 0, 0" Width="520">
-            <TextBlock Text="Twitch Extension" FontWeight="Bold" Margin="0, 16, 1, 0" />
+            <TextBlock Text="Twitch Extension (Beta)" FontWeight="Bold" Margin="0, 16, 1, 0" />
             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="{StaticResource DimmedTextBrush}"
-                       Text="Shows your viewers your lobby, heroes and talents as they are picked. Connect your channel and create an uploader key at the Twitch Extension section of heroesprofile.com/Api/Account, paste it here, then tick Twitch Extension on the main window." />
+                       Text="Shows your viewers your lobby, heroes and talents as they are picked. Connect your channel and create an uploader key at the Twitch Extension section of heroesprofile.com/Api/Account, paste it here, then tick Twitch Extension on the main window.&#x0a;&#x0a;Beta: this tool is still in testing and you may encounter issues. Report problems at heroesprofile.com/Contact or zemill@heroesprofile.com." />
             <PasswordBox x:Name="TwitchKeyBox" Height="23" PasswordChanged="TwitchKeyBox_PasswordChanged" />
             <StackPanel Orientation="Horizontal" helpers:MarginSetter.Margin="0, 0, 8, 0">
                 <Button x:Name="TwitchValidateButton" Content="Check key" Padding="10, 2" Click="TwitchValidate_Click" />
