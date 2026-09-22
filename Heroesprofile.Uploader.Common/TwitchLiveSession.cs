@@ -154,7 +154,12 @@ namespace Heroesprofile.Uploader.Common
                             continue;
                         }
 
-                        live.Hero = !string.IsNullOrEmpty(savePlayer.HeroAttributeId) ? savePlayer.HeroAttributeId : savePlayer.Character;
+                        // The name the details file carries, which is the hero actually being
+                        // played. The attribute events hold something else in ARAM - whatever the
+                        // player was last on - so it only goes along as a fallback for a client
+                        // whose language the site cannot match the name in.
+                        live.Hero = !string.IsNullOrEmpty(savePlayer.Character) ? savePlayer.Character : savePlayer.HeroAttributeId;
+                        live.HeroAttribute = savePlayer.HeroAttributeId;
                         // The lobby only guesses teams from slot order; the save knows.
                         live.Team = savePlayer.Team;
                         if (live.Region <= 0 && savePlayer.BattleNetRegionId > 0) {
@@ -209,7 +214,8 @@ namespace Heroesprofile.Uploader.Common
                 foreach (var player in replay.Players) {
                     var live = _players.First(p => p.Name == player.Name);
                     if (string.IsNullOrEmpty(live.Hero)) {
-                        live.Hero = !string.IsNullOrEmpty(player.HeroAttributeId) ? player.HeroAttributeId : player.Character;
+                        live.Hero = !string.IsNullOrEmpty(player.Character) ? player.Character : player.HeroAttributeId;
+                        live.HeroAttribute = player.HeroAttributeId;
                     }
                 }
 
@@ -366,6 +372,7 @@ namespace Heroesprofile.Uploader.Common
                             region = p.Region,
                             team = p.Team,
                             hero = p.Hero,
+                            hero_attribute = p.HeroAttribute,
                             talents = p.Talents,
                             ai = p.IsAI,
                         }),
@@ -453,6 +460,7 @@ namespace Heroesprofile.Uploader.Common
             public int Region { get; set; }
             public int Team { get; set; }
             public string Hero { get; set; }
+            public string HeroAttribute { get; set; }
             public List<string> Talents { get; set; } = new List<string>();
             public bool IsAI { get; set; }
         }
