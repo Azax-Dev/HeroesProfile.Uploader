@@ -14,6 +14,8 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Data;
@@ -62,6 +64,46 @@ namespace Heroesprofile.Uploader.Windows
                 }
                 _updateAvailable = value;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateAvailable)));
+            }
+        }
+
+        private string _twitchStatus = "";
+        /// <summary>Last thing the Twitch extension feed reported, for the main window.</summary>
+        public string TwitchStatus
+        {
+            get {
+                return _twitchStatus;
+            }
+            set {
+                _twitchStatus = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TwitchStatus)));
+            }
+        }
+
+        /// <summary>
+        /// The Twitch uploader key, kept encrypted for the current Windows user in
+        /// user.config. Anyone holding it can post to the streamer's extension.
+        /// </summary>
+        public static string TwitchKey
+        {
+            get {
+                var stored = Settings.TwitchUploaderKey;
+                if (string.IsNullOrEmpty(stored)) {
+                    return "";
+                }
+                try {
+                    return Encoding.UTF8.GetString(ProtectedData.Unprotect(Convert.FromBase64String(stored), null, DataProtectionScope.CurrentUser));
+                }
+                catch (Exception ex) {
+                    _log.Warn(ex, "Could not decrypt the stored Twitch uploader key; it needs entering again");
+                    return "";
+                }
+            }
+            set {
+                var plain = value?.Trim() ?? "";
+                Settings.TwitchUploaderKey = plain == ""
+                    ? ""
+                    : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(plain), null, DataProtectionScope.CurrentUser));
             }
         }
 
@@ -125,11 +167,16 @@ namespace Heroesprofile.Uploader.Windows
 
             Manager.DeleteAfterUpload = Settings.DeleteAfterUpload;
 
+            Manager.Twitch.Key = TwitchKey;
+            Manager.Twitch.Enabled = Settings.TwitchExtension;
+            Manager.Twitch.StatusChanged += (_, ev) => TwitchStatus = ev.Data;
+
             // the live pages are the part users most often report as "not working", and their log
             // is the only thing we get back - so say up front how they were configured
             _log.Info($"Settings: PreMatchPage={Settings.PreMatchPage}, PostMatchPage={Settings.PostMatchPage}, " +
                 $"Webhook={(string.IsNullOrWhiteSpace(Settings.WebhookUrl) ? "off" : "on")}, " +
-                $"ReplayPath={(string.IsNullOrWhiteSpace(Settings.ReplayPath) ? "auto" : Settings.ReplayPath)}");
+                $"ReplayPath={(string.IsNullOrWhiteSpace(Settings.ReplayPath) ? "auto" : Settings.ReplayPath)}, " +
+                $"TwitchExtension={Settings.TwitchExtension} (key {(string.IsNullOrEmpty(Manager.Twitch.Key) ? "missing" : "set")})");
 
             ApplyTheme(Settings.Theme);
 
@@ -153,6 +200,15 @@ namespace Heroesprofile.Uploader.Windows
                     WebhookNotifier.WebhookUrl = Settings.WebhookUrl;
                 }
 
+                if (ev.PropertyName == nameof(Settings.TwitchExtension)) {
+                    Manager.SetTwitchEnabled(Settings.TwitchExtension);
+                    TwitchStatus = Settings.TwitchExtension ? "Twitch extension on. Waiting for a game." : "";
+                }
+
+                if (ev.PropertyName == nameof(Settings.TwitchUploaderKey)) {
+                    Manager.Twitch.Key = TwitchKey;
+                }
+
                 if (ev.PropertyName == nameof(Settings.ReplayPath)) {
                     // Manager rebuilds its watchers and rescans when this changes
                     ReplayLocation.CustomPath = Settings.ReplayPath;
@@ -167,7 +223,7 @@ namespace Heroesprofile.Uploader.Windows
                 mainWindow = new MainWindow();
                 mainWindow.Show();
             }
-            Manager.Start(new Monitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(Manager.PreMatchPage));
+            Manager.Start(new Monitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(Manager.PreMatchPage, Manager.Twitch));
 
             WarnIfReplayFolderMissing();
 

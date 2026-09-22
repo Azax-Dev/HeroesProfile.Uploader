@@ -42,6 +42,12 @@ namespace Heroesprofile.Uploader.Common
         public bool PreMatchPage { get; set; }
         public bool PostMatchPage { get; set; }
 
+        /// <summary>Live lobby, hero and talent data for the Heroes Profile Twitch extension.</summary>
+        public TwitchLiveSession Twitch { get; } = new TwitchLiveSession();
+
+        /// <summary>Either live feature needs the battle lobby watched.</summary>
+        private bool WatchesLiveGames => PreMatchPage || Twitch.Enabled;
+
 
         private string _status = "";
 
@@ -104,11 +110,20 @@ namespace Heroesprofile.Uploader.Common
 
             _monitor.ReplayAdded += async (_, e) => {
                 await EnsureFileAvailable(e.Data);
-                if (PreMatchPage) {
-                    _live_monitor.StopBattleLobbyWatcher();
-                    _live_monitor.StopStormSaveWatcher();
-                    _live_monitor = new LiveMonitor();
-                    StartBattleLobbyWatcherEvent();
+
+                // The game this replay finishes: send the Twitch extension any talent
+                // the last storm save missed, then mark it over.
+                if (Twitch.Enabled && Twitch.HasGame) {
+                    try {
+                        await Twitch.EndGame(e.Data);
+                    }
+                    catch (Exception ex) {
+                        _log.Error(ex, "Error closing the Twitch extension game");
+                    }
+                }
+
+                if (WatchesLiveGames) {
+                    RestartLiveWatchers();
                 }
 
                 var replay = new ReplayFile(e.Data);
@@ -121,6 +136,7 @@ namespace Heroesprofile.Uploader.Common
 
             _monitor.Start();
             StartBattleLobbyWatcherEvent();
+            StartStormSaveWatcherEvent();
 
             for (int i = 0; i < MaxThreads; i++) {
                 Task.Run(UploadLoop).Forget();
@@ -128,11 +144,11 @@ namespace Heroesprofile.Uploader.Common
         }
         private void StartBattleLobbyWatcherEvent()
         {
-            if (PreMatchPage) {
+            if (WatchesLiveGames) {
                 _live_monitor.TempBattleLobbyCreated += async (_, e) => {
 
                     _live_monitor.StopBattleLobbyWatcher();
-                    _liveProcessor = new LiveProcessor(PreMatchPage);
+                    _liveProcessor = new LiveProcessor(PreMatchPage, Twitch);
 
                     var tmpPath = Path.GetTempFileName();
                     try {
@@ -158,6 +174,68 @@ namespace Heroesprofile.Uploader.Common
 
                 _live_monitor.StartBattleLobby();
             }
+        }
+
+        /// <summary>
+        /// Turns the Twitch extension feed on or off without a restart.
+        /// </summary>
+        public void SetTwitchEnabled(bool enabled)
+        {
+            if (Twitch.Enabled == enabled) {
+                return;
+            }
+            Twitch.Enabled = enabled;
+
+            if (_initialized) {
+                RestartLiveWatchers();
+            }
+        }
+
+        /// <summary>
+        /// Fresh watchers wired for whatever is switched on now. The old monitor is
+        /// dropped rather than unhooked, as it always has been after each replay.
+        /// </summary>
+        private void RestartLiveWatchers()
+        {
+            _live_monitor.StopBattleLobbyWatcher();
+            _live_monitor.StopStormSaveWatcher();
+            _live_monitor = new LiveMonitor();
+            StartBattleLobbyWatcherEvent();
+            StartStormSaveWatcherEvent();
+        }
+
+        /// <summary>
+        /// The game writes a .StormSave as it goes — after heroes load and as talents
+        /// are picked. Only the Twitch extension reads them.
+        /// </summary>
+        private void StartStormSaveWatcherEvent()
+        {
+            if (!Twitch.Enabled) {
+                return;
+            }
+
+            _live_monitor.StormSaveCreated += async (_, e) => {
+                var tmpPath = Path.GetTempFileName();
+                try {
+                    // Created fires before the game has finished writing it.
+                    await EnsureFileAvailable(e.Data, testWrite: false);
+                    await SafeCopy(e.Data, tmpPath, true);
+                    await Twitch.UpdateFromStormSave(tmpPath);
+                }
+                catch (Exception ex) {
+                    _log.Error(ex, $"Error processing storm save '{e.Data}'");
+                }
+                finally {
+                    try {
+                        File.Delete(tmpPath);
+                    }
+                    catch (Exception ex) {
+                        _log.Debug($"Could not delete temp storm save copy '{tmpPath}': {ex.Message}");
+                    }
+                }
+            };
+
+            _live_monitor.StartStormSave();
         }
 
         public void Stop()
