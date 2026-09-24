@@ -38,6 +38,32 @@ namespace Heroesprofile.Uploader.Common
         private TimeSpan _waitTime = TimeSpan.FromSeconds(3);
         public event PropertyChangedEventHandler PropertyChanged;
 
+        // Signaled (set) = not paused. Starts signaled so a Manager that's never paused behaves
+        // exactly as before - this is the only state UploadLoop waits on besides the queue itself.
+        private readonly AsyncManualResetEvent _resumed = new AsyncManualResetEvent(true);
+
+        /// <summary>
+        /// Pauses the upload loop between replays - in-flight uploads finish, new ones wait. The
+        /// queue keeps filling from the folder watcher while paused. Windows-neutral: nothing sets
+        /// this unless a UI wires it up, so behavior is unchanged if it's never touched.
+        /// </summary>
+        public bool Paused
+        {
+            get {
+                return !_resumed.IsSet;
+            }
+            set {
+                if (value == Paused) {
+                    return;
+                }
+                if (value) {
+                    _resumed.Reset();
+                } else {
+                    _resumed.Set();
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Paused)));
+            }
+        }
 
         public bool PreMatchPage { get; set; }
         public bool PostMatchPage { get; set; }
@@ -291,6 +317,7 @@ namespace Heroesprofile.Uploader.Common
         private async Task UploadLoop()
         {
             while (await processingQueue.OutputAvailableAsync()) {
+                await _resumed.WaitAsync();
                 try {
                     var file = await processingQueue.TakeAsync();
 
