@@ -102,6 +102,7 @@
           </StackPanel>
           <CheckBox Grid.Row="1" Grid.Column="1" Content="Minimize to tray" IsChecked="{Binding MinimizeToTray}" />
           <CheckBox Grid.Row="2" Grid.Column="0" Content="Start on login" IsChecked="{Binding StartOnLogin}" />
+          <CheckBox Grid.Row="2" Grid.Column="1" Content="Show in app menu" IsChecked="{Binding ShowInAppMenu}" />
         </Grid>
       </Border>
 

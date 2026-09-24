@@ -32,19 +32,51 @@ namespace Heroesprofile.Uploader.Linux
         private static string ConfigHome => XdgHome("XDG_CONFIG_HOME", ".config");
 
         public static string InstalledExePath => Path.Combine(BinDir, AppId);
+
+        /// <summary>
+        /// Where this app can be launched from again later. Inside an AppImage, ProcessPath is the
+        /// binary in a temporary mount that disappears on exit, so the .AppImage file itself is used.
+        /// </summary>
+        private static string LaunchablePath => Environment.GetEnvironmentVariable("APPIMAGE") is string appImage && appImage != ""
+            ? appImage
+            : Environment.ProcessPath;
+
+        public static bool IsAppMenuEntryInstalled => File.Exists(DesktopEntryPath);
         private static string DesktopEntryPath => Path.Combine(DataHome, "applications", $"{AppId}.desktop");
         private static string AutostartEntryPath => Path.Combine(ConfigHome, "autostart", $"{AppId}.desktop");
         // Actual asset is 486x432; this is the closest standard hicolor bucket, and desktop
         // environments scale it down for the menu/taskbar without visible loss.
         private static string IconPath => Path.Combine(DataHome, "icons", "hicolor", "512x512", "apps", $"{AppId}.png");
 
-        /// <summary>Copies the running executable to ~/.local/bin and adds the app-menu entry + icon.</summary>
-        public static void InstallAppMenuEntry(string sourceExePath)
+        /// <summary>
+        /// Null if the running executable can be installed, otherwise why not. `dotnet run`/`dotnet build`
+        /// output is an apphost with the managed .dll (and the rest of the app) next to it, so copying
+        /// the apphost alone would be broken. The single-file publish has no such .dll. Inside an
+        /// AppImage the running executable is that same single-file binary, so it installs as a plain
+        /// executable that doesn't need the AppImage (or FUSE) afterwards.
+        /// </summary>
+        public static string WhyNotInstallable()
         {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe) || exe.EndsWith("dotnet", StringComparison.OrdinalIgnoreCase) ||
+                File.Exists(Path.Combine(Path.GetDirectoryName(exe), Path.GetFileName(exe) + ".dll"))) {
+                return "install needs to be run from the published single-file binary, not `dotnet run`/`dotnet build` output. " +
+                    "Publish with `dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true` and run that.";
+            }
+            return null;
+        }
+
+        /// <summary>Copies the running executable to ~/.local/bin and adds the app-menu entry + icon.</summary>
+        public static void InstallAppMenuEntry()
+        {
+            var sourceExePath = Environment.ProcessPath;
             Directory.CreateDirectory(BinDir);
-            File.Copy(sourceExePath, InstalledExePath, overwrite: true);
-            MakeExecutable(InstalledExePath);
-            _log.Info($"Installed binary to {InstalledExePath}");
+            // Already running the installed copy: just (re)write the menu entry and icon.
+            if (Path.GetFullPath(sourceExePath) != Path.GetFullPath(InstalledExePath)) {
+                File.Copy(sourceExePath, InstalledExePath, overwrite: true);
+                MakeExecutable(InstalledExePath);
+                _log.Info($"Installed binary to {InstalledExePath}");
+            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(IconPath));
             using (var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream(IconResourceName))
@@ -60,12 +92,18 @@ namespace Heroesprofile.Uploader.Linux
         /// <summary>Removes everything <see cref="InstallAppMenuEntry"/> added. Leaves config and replay data alone.</summary>
         public static void UninstallAppMenuEntry()
         {
-            DeleteIfExists(DesktopEntryPath);
-            DeleteIfExists(IconPath);
-            DeleteIfExists(InstalledExePath);
+            RemoveAppMenuEntry();
             // Uninstalling should also turn off start-on-login - an autostart entry pointing at a
             // binary that no longer exists would just silently fail every login.
             SetStartOnLogin(false);
+        }
+
+        /// <summary>Removes the app-menu entry, icon and ~/.local/bin copy, but not the autostart entry.</summary>
+        public static void RemoveAppMenuEntry()
+        {
+            DeleteIfExists(DesktopEntryPath);
+            DeleteIfExists(IconPath);
+            DeleteIfExists(InstalledExePath);
         }
 
         /// <summary>Writes or removes the XDG autostart entry for Settings' "Start on login" toggle.</summary>
@@ -78,7 +116,7 @@ namespace Heroesprofile.Uploader.Linux
 
             // Prefer the installed copy so autostart survives the source binary moving/disappearing;
             // fall back to wherever we're currently running from (e.g. testing before `install`).
-            var exePath = File.Exists(InstalledExePath) ? InstalledExePath : Environment.ProcessPath;
+            var exePath = File.Exists(InstalledExePath) ? InstalledExePath : LaunchablePath;
             Directory.CreateDirectory(Path.GetDirectoryName(AutostartEntryPath));
             File.WriteAllText(AutostartEntryPath, DesktopEntryContents(exePath, minimized: true));
             _log.Info($"Wrote autostart entry {AutostartEntryPath}");

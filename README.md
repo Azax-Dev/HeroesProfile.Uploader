@@ -13,7 +13,7 @@ Uploads Heroes of the Storm replays to [heroesprofile.com](https://www.heroespro
 
 ## Linux
 
-There is a native Linux build: download **"HeroesProfileUploader-linux-x64.tar.gz"** from the same [Releases](https://github.com/Heroes-Profile/HeroesProfile.Uploader/releases/latest) page. Heroes of the Storm keeps running under Wine/Proton; you point the uploader at that prefix and it finds your replays. See [packaging/linux/README.md](packaging/linux/README.md) for setup, start on login, and headless/systemd use.
+There is a native Linux build: download **"HeroesProfileUploader-linux-x86_64.AppImage"** from the same [Releases](https://github.com/Heroes-Profile/HeroesProfile.Uploader/releases/latest) page, make it executable and run it (a plain `.tar.gz` is there too). It is self-contained and needs no .NET or other libraries installed. Heroes of the Storm keeps running under Wine/Proton; you point the uploader at that prefix and it finds your replays. See [packaging/linux/README.md](packaging/linux/README.md) for setup, start on login, and headless/systemd use.
 
 # Contributing
 

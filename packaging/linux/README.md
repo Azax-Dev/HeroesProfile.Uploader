@@ -7,21 +7,27 @@ Wine prefix that has HotS in it and it finds your replays.
 
 ## Install
 
-1. Download `HeroesProfileUploader-linux-x64.tar.gz` from the
-   [latest release](https://github.com/Heroes-Profile/HeroesProfile.Uploader/releases/latest) and unpack it.
-   The `heroesprofile-uploader` binary is self-contained: no .NET install required.
+1. Download `HeroesProfileUploader-linux-x86_64.AppImage` from the
+   [latest release](https://github.com/Heroes-Profile/HeroesProfile.Uploader/releases/latest).
+   It is self-contained: no .NET or other libraries to install. It runs on any current
+   x86_64 distro (Ubuntu 20.04+, Mint 20+, Debian 11+, Fedora, Arch, ...).
 
-2. Add it to your app menu (copies the binary to `~/.local/bin` and installs a launcher and icon):
+2. Make it executable and run it: right-click → Properties → Permissions → "Allow executing file as
+   program", then double-click it. Or from a terminal:
 
    ```sh
-   ./heroesprofile-uploader install
+   chmod +x HeroesProfileUploader-linux-x86_64.AppImage
+   ./HeroesProfileUploader-linux-x86_64.AppImage
    ```
 
-   `heroesprofile-uploader uninstall` removes them again. You can also just run the binary from
-   wherever you unpacked it.
+   Tick **Show in app menu** in the main window to add it to your app menu. This copies the app to
+   `~/.local/bin/heroesprofile-uploader`, so you can delete the downloaded file afterwards. Untick it
+   to remove it again.
 
-3. Launch **Heroes Profile Uploader** from your app menu. On first run it asks for your Wine/Proton
-   prefix. Pick the prefix folder (the one containing `drive_c`). A Steam `compatdata/<appid>`
+   Prefer a plain binary? `HeroesProfileUploader-linux-x64.tar.gz` has the same program, unpacked.
+   `./heroesprofile-uploader install` / `uninstall` does the same as the checkbox.
+
+3. On first run it asks for your Wine/Proton prefix. Pick the prefix folder (the one containing `drive_c`). A Steam `compatdata/<appid>`
    folder or the HotS `Accounts` folder itself also work.
 
 Common prefix locations:
@@ -69,6 +75,7 @@ not both at once.
 
 ```sh
 dotnet publish Heroesprofile.Uploader.Linux -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true
+packaging/linux/build-appimage.sh <path to the published heroesprofile-uploader> HeroesProfileUploader-linux-x86_64.AppImage
 ```
 
 Needs the .NET 8 SDK. `Directory.Build.props` switches off the replay parser's GitVersionTask on

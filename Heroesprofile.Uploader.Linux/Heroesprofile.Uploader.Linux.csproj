@@ -5,10 +5,11 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Heroesprofile.Uploader.Linux</RootNamespace>
     <AssemblyName>heroesprofile-uploader</AssemblyName>
-    <!-- NLog's default JSON serializer hardcodes a "en-US" CultureInfo lookup, which throws under
-         InvariantGlobalization - so this stays off despite otherwise being a reasonable size trim for
-         a self-contained publish. -->
-    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- No dependency on the distro's libicu (missing or a different soname on many distros).
+         PredefinedCulturesOnly=false because NLog's JSON serializer looks up "en-US" at startup,
+         which throws in invariant mode otherwise. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
     <!-- Kept in step with the Windows app's AssemblyVersion; release.yml passes -p:Version from there.
          "Check for update" compares this against the latest release that carries a Linux build. -->
     <Version>2.8.0</Version>

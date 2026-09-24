@@ -83,6 +83,10 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
         [ObservableProperty]
         private bool startOnLogin;
 
+        /// <summary>Not a config setting: mirrors whether the app-menu entry exists (also set by the `install` CLI command).</summary>
+        [ObservableProperty]
+        private bool showInAppMenu;
+
         public string PauseButtonGlyph => IsPaused ? "▶" : "⏸"; // ▶ / ⏸
         public string PauseButtonTooltip => IsPaused ? "Resume uploading" : "Pause uploading";
 
@@ -100,6 +104,7 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             twitchExtension = Config.TwitchExtension;
             minimizeToTray = Config.MinimizeToTray;
             startOnLogin = Config.StartOnLogin;
+            showInAppMenu = DesktopIntegration.IsAppMenuEntryInstalled;
 
             TryResolveAndStart(Config.Prefix, reportErrorIfSet: true);
         }
@@ -293,6 +298,38 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
                 _log.Warn(ex, "Could not update the autostart entry");
             }
             SaveConfig();
+        }
+
+        partial void OnShowInAppMenuChanged(bool value)
+        {
+            try {
+                if (value) {
+                    var whyNot = DesktopIntegration.WhyNotInstallable();
+                    if (whyNot != null) {
+                        _log.Warn(whyNot);
+                    }
+                    else {
+                        DesktopIntegration.InstallAppMenuEntry();
+                    }
+                }
+                else {
+                    DesktopIntegration.RemoveAppMenuEntry();
+                }
+                // The autostart entry points at the ~/.local/bin copy when there is one, so rewrite
+                // it to follow that copy appearing or going away.
+                if (StartOnLogin) {
+                    DesktopIntegration.SetStartOnLogin(true);
+                }
+            }
+            catch (Exception ex) {
+                _log.Warn(ex, "Could not update the app menu entry");
+            }
+
+            if (DesktopIntegration.IsAppMenuEntryInstalled != value) {
+                // Didn't take; put the checkbox back without re-running this handler.
+                showInAppMenu = !value;
+                Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(ShowInAppMenu)));
+            }
         }
 
         private void SaveConfig()

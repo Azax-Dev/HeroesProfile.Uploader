@@ -68,9 +68,12 @@ jobs:
           mkdir -p dist/HeroesProfileUploader
           cp publish/heroesprofile-uploader packaging/linux/README.md packaging/linux/heroesprofile-uploader.service dist/HeroesProfileUploader/
           tar -czf HeroesProfileUploader-linux-x64.tar.gz -C dist HeroesProfileUploader
+          packaging/linux/build-appimage.sh publish/heroesprofile-uploader HeroesProfileUploader-linux-x86_64.AppImage
 
       - name: Attach to release
         if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ steps.version.outputs.tag }}" HeroesProfileUploader-linux-x64.tar.gz
+        run: >
+          gh release upload "${{ steps.version.outputs.tag }}"
+          HeroesProfileUploader-linux-x86_64.AppImage HeroesProfileUploader-linux-x64.tar.gz
