@@ -49,7 +49,7 @@ namespace Heroesprofile.Uploader.Linux
             // Common.Uploader, spelled out - unqualified "Uploader" resolves to the enclosing
             // Heroesprofile.Uploader namespace segment instead of the type (same reason the Windows
             // app spells it "Common.Uploader" in App.xaml.cs).
-            manager.Start(new Monitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(config.PreMatchPage, manager.Twitch));
+            manager.Start(new SettledMonitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(config.PreMatchPage, manager.Twitch));
 
             _log.Info("Running - watching for new replays. Press Ctrl+C to stop.");
             await stopRequested.Task;
