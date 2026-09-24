@@ -190,7 +190,7 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
                 $"twitchExtension={Config.TwitchExtension}, webhook={(string.IsNullOrWhiteSpace(Config.WebhookUrl) ? "off" : "on")}");
 
             // Common.Uploader, spelled out - see PrefixSetup/RunCommand for why the plain name resolves wrong here.
-            Manager.Start(new Monitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(Manager.PreMatchPage, Manager.Twitch));
+            Manager.Start(new SettledMonitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(Manager.PreMatchPage, Manager.Twitch));
 
             UpdateListCaption();
             RefreshAggregates();
