@@ -1,16 +1,15 @@
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Heroesprofile.Uploader.Common;
-using Newtonsoft.Json.Linq;
 using NLog;
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
@@ -67,6 +66,16 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
         private string updateStatusText = "";
 
         private string _updateReleaseUrl;
+
+        /// <summary>An update was downloaded, verified and staged - same wording/behaviour as the
+        /// Windows app's own banner (MainWindow.xaml), just Avalonia-styled.</summary>
+        [ObservableProperty]
+        private bool showRestartBanner;
+
+        public string RestartBannerText => "An update is downloaded and will be installed when you restart the uploader.";
+
+        private readonly Updater _updater = new Updater();
+        private bool _restarting;
 
         [ObservableProperty]
         private bool postMatchPage;
@@ -353,6 +362,8 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             Config.Theme = settings.SelectedTheme;
             Config.TwitchUploaderKey = settings.TwitchUploaderKey;
             Config.LogLevel = settings.SelectedLogLevel;
+            Config.AutoUpdate = settings.AutoUpdate;
+            Config.AllowPreReleases = settings.AllowPreReleases;
             SaveConfig();
 
             Logging.Configure(Logging.ParseLevel(Config.LogLevel));
@@ -404,40 +415,53 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             }
         }
 
+        /// <summary>Startup/hourly auto-check, wired up by App.axaml.cs - stages an update if
+        /// AutoUpdate is on and one's found, same as `run`'s headless check but with actual staging
+        /// (there's a window here to show a restart banner in).</summary>
+        public Task RunAutoUpdateCheckAsync() => Config.AutoUpdate ? CheckAndMaybeStageAsync(manual: false) : Task.CompletedTask;
+
         [RelayCommand]
-        private async Task CheckForUpdateAsync()
+        private Task CheckForUpdateAsync() => CheckAndMaybeStageAsync(manual: true);
+
+        /// <summary>
+        /// Runs the same check/stage either way - the manual button ignores AutoUpdate (plan: "runs the
+        /// same check regardless of autoUpdate and stages if found"); only the status text/"Checking…"
+        /// feedback is manual-only, since the auto path shouldn't narrate itself in the UI.
+        /// </summary>
+        private async Task CheckAndMaybeStageAsync(bool manual)
         {
-            UpdateStatusText = "Checking…";
-            _updateReleaseUrl = null;
-            try {
-                var repo = string.IsNullOrWhiteSpace(Config.UpdateRepository) ? new AppConfig().UpdateRepository : Config.UpdateRepository.Trim();
-                using var http = new HttpClient();
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("heroesprofile-uploader-linux");
-                var json = await http.GetStringAsync($"https://api.github.com/repos/{repo}/releases?per_page=30");
-
-                // Windows-only releases don't count - only one that ships a Linux build is an update for us
-                var release = JArray.Parse(json)
-                    .Where(r => !(bool)r["draft"] && !(bool)r["prerelease"])
-                    .FirstOrDefault(r => (r["assets"] as JArray)?.Any(a => ((string)a["name"] ?? "").IndexOf("linux", StringComparison.OrdinalIgnoreCase) >= 0) == true);
-                if (release == null) {
-                    UpdateStatusText = "No Linux release published yet.";
-                    return;
-                }
-
-                var tag = (string)release["tag_name"] ?? "";
-                var latest = ParseVersion(tag);
-                var current = typeof(MainWindowViewModel).Assembly.GetName().Version;
-
-                if (latest != null && current != null && latest > current) {
-                    UpdateStatusText = $"Update available: {tag} (you have v{current.ToString(3)}) — click to open the release page.";
-                    _updateReleaseUrl = (string)release["html_url"];
-                } else {
-                    UpdateStatusText = "You're up to date.";
-                }
+            if (manual) {
+                UpdateStatusText = "Checking…";
+                _updateReleaseUrl = null;
             }
-            catch (Exception ex) {
-                _log.Warn(ex, "Update check failed");
-                UpdateStatusText = "Couldn't check for updates - see log.";
+
+            var result = await _updater.CheckAndStageAsync(Config);
+            switch (result.Outcome) {
+                case Updater.StageOutcome.Staged:
+                    ShowRestartBanner = true;
+                    if (manual) {
+                        UpdateStatusText = "";
+                    }
+                    break;
+
+                case Updater.StageOutcome.Fallback:
+                    _updateReleaseUrl = result.ReleaseUrl;
+                    if (manual) {
+                        UpdateStatusText = $"Update available: v{result.Version} — click to open the release page.";
+                    }
+                    break;
+
+                case Updater.StageOutcome.NoUpdate:
+                    if (manual) {
+                        UpdateStatusText = "You're up to date.";
+                    }
+                    break;
+
+                default: // Failed / Skipped - CheckAndStageAsync already logged the real reason.
+                    if (manual) {
+                        UpdateStatusText = "Couldn't check for updates - see log.";
+                    }
+                    break;
             }
         }
 
@@ -455,13 +479,34 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             }
         }
 
-        private static Version ParseVersion(string tag)
+        /// <summary>The banner's "Restart now." link - called from MainWindow's code-behind, which
+        /// knows whether the window is currently hidden (tray) and passes that through as --minimized.</summary>
+        public async Task RestartNowAsync(bool minimized)
         {
-            if (string.IsNullOrWhiteSpace(tag)) {
-                return null;
+            if (_restarting) {
+                return;
             }
-            var trimmed = tag.TrimStart('v', 'V');
-            return Version.TryParse(trimmed, out var version) ? version : null;
+            _restarting = true;
+            try {
+                Manager?.Stop();
+                // Hashes the staged binary to verify it (can be tens of MB) - off the UI thread.
+                var applied = await Task.Run(() => Updater.ApplyStagedAndRelaunch(minimized));
+                if (!applied) {
+                    _log.Warn("Restart now: nothing valid staged to apply.");
+                    _restarting = false;
+                    return;
+                }
+
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
+                    desktop.Shutdown();
+                } else {
+                    Environment.Exit(0);
+                }
+            }
+            catch (Exception ex) {
+                _log.Error(ex, "Restart now failed");
+                _restarting = false;
+            }
         }
     }
 }

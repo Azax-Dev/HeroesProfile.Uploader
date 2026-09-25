@@ -43,6 +43,13 @@ namespace Heroesprofile.Uploader.Linux.Gui.Views
             }
         }
 
+        private async void RestartNow_Click(object sender, RoutedEventArgs e)
+        {
+            // Minimized-to-tray right now (hidden, not just iconified) - relaunch the same way so the
+            // new process doesn't suddenly pop a window the user had tucked away.
+            await ViewModel.RestartNowAsync(minimized: !IsVisible);
+        }
+
         private async void OpenSettings_Click(object sender, RoutedEventArgs e)
         {
             var settingsVm = new SettingsWindowViewModel(ViewModel.Config);

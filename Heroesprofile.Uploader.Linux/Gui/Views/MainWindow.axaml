@@ -65,6 +65,14 @@
             <TextBlock Text="{Binding ErrorBannerText}" FontSize="11" Foreground="{DynamicResource AppAccentInkBrush}" />
           </Border>
 
+          <Border IsVisible="{Binding ShowRestartBanner}" Background="{DynamicResource AppRowAltBrush}"
+                  CornerRadius="4" Padding="8,5">
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding RestartBannerText}" FontSize="11" TextWrapping="Wrap" />
+              <Button Classes="link-btn" Content="Restart now." Click="RestartNow_Click" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+
           <ItemsControl ItemsSource="{Binding StatChips}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>

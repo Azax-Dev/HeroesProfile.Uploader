@@ -41,6 +41,12 @@ namespace Heroesprofile.Uploader.Linux
         /// </summary>
         public string UpdateRepository { get; set; } = "Heroes-Profile/HeroesProfile.Uploader";
 
+        /// <summary>Check for updates on startup/hourly (GUI) or startup/every 24h (`run`) and stage them automatically.</summary>
+        public bool AutoUpdate { get; set; } = true;
+
+        /// <summary>Also consider prerelease GitHub releases (test builds) when checking for updates.</summary>
+        public bool AllowPreReleases { get; set; }
+
         private static string XdgHome(string envVar, string fallbackLeaf)
         {
             var value = Environment.GetEnvironmentVariable(envVar);
