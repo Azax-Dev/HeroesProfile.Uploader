@@ -1,36 +1,30 @@
 # Heroes Profile Uploader for Linux
 
-A native Linux build of the Heroes Profile uploader. It uses the same upload logic as the Windows
-app, so replays go up exactly as they would from Windows. Heroes of the Storm still runs under
-Wine/Proton (Lutris, Steam, Bottles, plain Wine); only the uploader is native. You point it at the
-Wine prefix that has HotS in it and it finds your replays.
+Uploads your Heroes of the Storm replays to [Heroes Profile](https://www.heroesprofile.com) from Linux.
+HotS keeps running under Wine/Proton (Lutris, Steam, Bottles, plain Wine); the uploader runs natively
+and reads the replays from that Wine prefix. It uses the same upload code as the Windows app.
 
-## Install
+## Quick start
 
 1. Download `HeroesProfileUploader-linux-x86_64.AppImage` from the
    [latest release](https://github.com/Heroes-Profile/HeroesProfile.Uploader/releases/latest).
-   It is self-contained: no .NET or other libraries to install. It runs on any current
-   x86_64 distro (Ubuntu 20.04+, Mint 20+, Debian 11+, Fedora, Arch, ...).
-
-2. Make it executable and run it: right-click → Properties → Permissions → "Allow executing file as
-   program", then double-click it. Or from a terminal:
+   Nothing else to install: no .NET, no extra libraries. Works on any current x86_64 distro.
+2. Make it executable and start it. Either right-click → Properties → Permissions → "Allow executing
+   file as program" and double-click it, or:
 
    ```sh
    chmod +x HeroesProfileUploader-linux-x86_64.AppImage
    ./HeroesProfileUploader-linux-x86_64.AppImage
    ```
 
-   Tick **Show in app menu** in the main window to add it to your app menu. This copies the app to
-   `~/.local/bin/heroesprofile-uploader`, so you can delete the downloaded file afterwards. Untick it
-   to remove it again.
+3. It asks for your Wine/Proton prefix. Pick the folder that contains `drive_c`.
+4. Tick **Show in app menu**. This copies the app to `~/.local/bin/heroesprofile-uploader` and adds
+   it to your app menu, so you can delete the downloaded file.
 
-   Prefer a plain binary? `HeroesProfileUploader-linux-x64.tar.gz` has the same program, unpacked.
-   `./heroesprofile-uploader install` / `uninstall` does the same as the checkbox.
+That's it. It uploads any replays you haven't uploaded yet, then uploads each new game as soon as it
+finishes, for as long as the uploader is running.
 
-3. On first run it asks for your Wine/Proton prefix. Pick the prefix folder (the one containing `drive_c`). A Steam `compatdata/<appid>`
-   folder or the HotS `Accounts` folder itself also work.
-
-Common prefix locations:
+### Where is my prefix?
 
 | Launcher | Prefix |
 |---|---|
@@ -39,37 +33,120 @@ Common prefix locations:
 | Bottles | `~/.local/share/bottles/bottles/<name>` |
 | Plain Wine | `~/.wine` |
 
-**Start on login** and **Minimize to tray** are toggles in the main window. The tray icon needs a
-StatusNotifier host: KDE, Cinnamon, XFCE and most others have one; on GNOME install the
-AppIndicator extension.
+A Steam `compatdata/<appid>` folder or the HotS `Accounts` folder itself also work.
 
-Settings (prefix, theme, webhook, Twitch key, log level) are saved in
-`~/.config/heroesprofile/config.json`. Upload history and logs are under
-`~/.local/share/heroesprofile/`.
+## Two ways to run it
 
-## Headless (no GUI)
+Pick **one**. Running both at the same time makes them compete over the same replays.
 
-The same binary works without a desktop, for example on a machine you only reach over SSH:
+| | Desktop app | Background service |
+|---|---|---|
+| Uploads new games automatically | yes | yes |
+| Window, stats, tray icon | yes | no |
+| Starts on login | optional toggle | yes |
+| Updates itself | **yes** | **no**: you update it by hand |
 
-```sh
-heroesprofile-uploader scan --dry-run --prefix /path/to/prefix   # what would upload; uploads nothing
-heroesprofile-uploader run --prefix /path/to/prefix              # watch and upload until stopped
+### 1. Desktop app (most people)
+
+What you get from the quick start: a window with your replay list and upload stats.
+
+- **Start on login**: starts the uploader automatically, minimized, when you log in.
+- **Minimize to tray**: closing or minimizing the window keeps it running in the tray.
+  On GNOME you need the AppIndicator extension to see the tray icon; KDE, Cinnamon, XFCE and most
+  other desktops have a tray already.
+- **Pause** stops new uploads until you resume.
+- **Updates** install themselves: the app checks every hour, downloads the new version, and shows
+  a banner. Click **Restart now** or just restart it later. You can turn this off in Settings.
+
+### 2. Background service (no window)
+
+The same program can run with no window at all. Use this if you don't want a window or tray icon, or
+on a machine you only reach over SSH. Run it as a systemd user service so it starts on login and
+runs in the background. You don't need to keep a terminal open.
+
+First set up the prefix, either by running the desktop app once, or by creating
+`~/.config/heroesprofile/config.json` yourself:
+
+```json
+{ "prefix": "/path/to/your/prefix" }
 ```
 
-`--prefix` can be left out once `"prefix"` is set in the config file.
-
-To run it as a systemd user service:
+Then install the app to `~/.local/bin` (skip this if you already ticked **Show in app menu**) and
+enable the service:
 
 ```sh
+./HeroesProfileUploader-linux-x86_64.AppImage install
 mkdir -p ~/.config/systemd/user
-cp heroesprofile-uploader.service ~/.config/systemd/user/
+cat > ~/.config/systemd/user/heroesprofile-uploader.service <<'UNIT'
+[Unit]
+Description=Heroes Profile replay uploader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/heroesprofile-uploader run
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+UNIT
 systemctl --user daemon-reload
 systemctl --user enable --now heroesprofile-uploader
-journalctl --user -u heroesprofile-uploader -f
 ```
 
-The service runs `~/.local/bin/heroesprofile-uploader run`. Use either the service or the GUI,
-not both at once.
+Useful commands:
+
+```sh
+journalctl --user -u heroesprofile-uploader -f        # watch what it's doing
+systemctl --user stop heroesprofile-uploader          # stop it
+systemctl --user disable heroesprofile-uploader       # don't start on login any more
+```
+
+**The service doesn't update itself.** Only the desktop app does. When a new version is out, the
+service writes a warning to its log (`journalctl`). To update, download the new version and:
+
+```sh
+systemctl --user stop heroesprofile-uploader
+./HeroesProfileUploader-linux-x86_64.AppImage install
+systemctl --user start heroesprofile-uploader
+```
+
+You can also run it directly in a terminal. It keeps running until you press Ctrl+C:
+
+```sh
+heroesprofile-uploader run                            # upload everything new, keep watching
+heroesprofile-uploader scan --dry-run                 # just list what would upload (uploads nothing)
+heroesprofile-uploader run --prefix /path/to/prefix   # use a different prefix than the config file
+```
+
+## Files
+
+| What | Where |
+|---|---|
+| Settings | `~/.config/heroesprofile/config.json` |
+| Log | `~/.local/share/heroesprofile/logs/log.txt` (the app's **Show log** button opens it) |
+| Upload history | `~/.local/share/heroesprofile/` |
+| Installed app | `~/.local/bin/heroesprofile-uploader` |
+
+## Uninstall
+
+Untick **Show in app menu** (or run `heroesprofile-uploader uninstall`). This removes the app, the menu
+entry and the start-on-login entry. If you set up the service, also run
+`systemctl --user disable --now heroesprofile-uploader` and delete
+`~/.config/systemd/user/heroesprofile-uploader.service`. To remove your settings and history too,
+delete `~/.config/heroesprofile`, `~/.local/share/heroesprofile` and `~/.net/heroesprofile-uploader`
+(libraries the app unpacks on first start).
+
+## Problems?
+
+- **"Couldn't find Heroes of the Storm in that prefix"**: pick the folder that contains `drive_c`,
+  not `drive_c` itself or the game's install folder. You need to have played at least one game, so
+  that the `Documents/Heroes of the Storm/Accounts` folder exists inside the prefix.
+- **No icon in the taskbar**: tick **Show in app menu**. Some desktops only show the icon for apps in
+  the menu.
+- Anything else: check the log (see [Files](#files)) and open an issue with it.
 
 ## Building from source
 
