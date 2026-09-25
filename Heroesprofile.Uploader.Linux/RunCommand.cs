@@ -1,7 +1,9 @@
 using Heroesprofile.Uploader.Common;
 using NLog;
+using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Heroesprofile.Uploader.Linux
@@ -51,14 +53,56 @@ namespace Heroesprofile.Uploader.Linux
             // app spells it "Common.Uploader" in App.xaml.cs).
             manager.Start(new SettledMonitor(), new LiveMonitor(), new Analyzer(), new Common.Uploader(), new LiveProcessor(config.PreMatchPage, manager.Twitch));
 
+            // Headless: no GUI to click "Restart now", so this never downloads/stages anything - just
+            // a log line for journalctl. Checks immediately, then every 24h until shutdown.
+            using var updateCheckCts = new CancellationTokenSource();
+            var updateCheckTask = RunPeriodicUpdateCheckAsync(config, updateCheckCts.Token);
+
             _log.Info("Running - watching for new replays. Press Ctrl+C to stop.");
             await stopRequested.Task;
 
+            updateCheckCts.Cancel();
             _log.Info("Stopping...");
             manager.Stop();
+            try {
+                await updateCheckTask;
+            }
+            catch (OperationCanceledException) {
+                // Expected - the check loop was mid-delay when we cancelled it.
+            }
             _log.Info("Stopped.");
 
             return 0;
+        }
+
+        private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(24);
+
+        private static async Task RunPeriodicUpdateCheckAsync(AppConfig config, CancellationToken ct)
+        {
+            if (!config.AutoUpdate) {
+                return;
+            }
+
+            var updater = new Updater();
+            while (!ct.IsCancellationRequested) {
+                await LogIfUpdateAvailableAsync(updater, config);
+                await Task.Delay(UpdateCheckInterval, ct);
+            }
+        }
+
+        private static async Task LogIfUpdateAvailableAsync(Updater updater, AppConfig config)
+        {
+            try {
+                var release = await updater.FindLatestAsync(config.UpdateRepository, config.AllowPreReleases);
+                var current = ReleaseVersion.Current();
+                if (release != null && release.Version > current) {
+                    _log.Warn($"A newer version (v{release.Version}) is available: {release.HtmlUrl}");
+                }
+            }
+            catch (Exception ex) {
+                // Same "don't let update checks disturb anything real" rule as the GUI - log and move on.
+                _log.Debug(ex, "Update check failed");
+            }
         }
     }
 }

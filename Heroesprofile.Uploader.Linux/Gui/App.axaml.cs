@@ -3,8 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Heroesprofile.Uploader.Linux.Gui.ViewModels;
 using Heroesprofile.Uploader.Linux.Gui.Views;
+using System;
 
 namespace Heroesprofile.Uploader.Linux.Gui
 {
@@ -16,6 +18,7 @@ namespace Heroesprofile.Uploader.Linux.Gui
         private MainWindowViewModel _viewModel;
         private MainWindow _window;
         private TrayIcon _trayIcon;
+        private DispatcherTimer _updateTimer;
 
         public override void Initialize()
         {
@@ -57,6 +60,13 @@ namespace Heroesprofile.Uploader.Linux.Gui
                     _window.WindowState = WindowState.Minimized;
                     _window.ShowInTaskbar = false;
                 }
+
+                // Check for updates on startup and then hourly - same cadence as the Windows app's own
+                // DispatcherTimer (App.xaml.cs), just without the Squirrel dependency.
+                _ = _viewModel.RunAutoUpdateCheckAsync();
+                _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(1) };
+                _updateTimer.Tick += async (_, __) => await _viewModel.RunAutoUpdateCheckAsync();
+                _updateTimer.Start();
             }
 
             base.OnFrameworkInitializationCompleted();

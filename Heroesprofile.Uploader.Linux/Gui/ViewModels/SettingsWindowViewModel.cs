@@ -53,6 +53,13 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
         [ObservableProperty]
         private string selectedLogLevelLabel;
 
+        [ObservableProperty]
+        private bool autoUpdate;
+
+        /// <summary>"Allow beta updates" - same wording as the Windows SettingsWindow's checkbox.</summary>
+        [ObservableProperty]
+        private bool allowPreReleases;
+
         /// <summary>NLog level name ("Warn", not "Warning") for AppConfig/Logging.ParseLevel.</summary>
         public string SelectedLogLevel => SelectedLogLevelLabel == "Warning" ? "Warn" : SelectedLogLevelLabel;
 
@@ -68,6 +75,8 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             webhookUrl = config.WebhookUrl ?? "";
             twitchUploaderKey = config.TwitchUploaderKey ?? "";
             selectedLogLevelLabel = config.LogLevel == "Warn" ? "Warning" : (config.LogLevel ?? "Info");
+            autoUpdate = config.AutoUpdate;
+            allowPreReleases = config.AllowPreReleases;
 
             themeIsDark = config.Theme == "Dark";
             themeIsLight = config.Theme == "Light";

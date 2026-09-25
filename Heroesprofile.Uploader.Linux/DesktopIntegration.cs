@@ -1,5 +1,6 @@
 using NLog;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
@@ -143,6 +144,75 @@ StartupWMClass={AppId}
             if (File.Exists(path)) {
                 File.Delete(path);
                 _log.Info($"Removed {path}");
+            }
+        }
+
+        /// <summary>
+        /// If the app-menu entry is installed and this running binary is newer than the ~/.local/bin
+        /// copy it points at, re-copies it - the same thing `install` does, minus rewriting the
+        /// desktop entry/icon every time. Called at GUI and `run` startup so a user who enabled "Show
+        /// in app menu"/`install` once, then later launches a newer binary directly (a fresh AppImage,
+        /// a manually-replaced tarball binary, Updater's own staged-then-applied binary, ...), ends up
+        /// with the app-menu entry pointing at that same newer version instead of the stale copy.
+        /// No-op under `dotnet run`/`dotnet build` output - same guard as `install` itself.
+        /// </summary>
+        public static void RefreshInstalledCopyIfStale()
+        {
+            if (!IsAppMenuEntryInstalled || WhyNotInstallable() != null) {
+                return;
+            }
+
+            var running = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(running) || PathsEqual(running, InstalledExePath)) {
+                return; // already running the installed copy
+            }
+
+            if (!IsRunningNewerThanInstalled(running)) {
+                return;
+            }
+
+            File.Copy(running, InstalledExePath, overwrite: true);
+            MakeExecutable(InstalledExePath);
+            _log.Info($"Refreshed {InstalledExePath} from the newer binary currently running ({running}).");
+        }
+
+        private static bool PathsEqual(string a, string b) => Path.GetFullPath(a) == Path.GetFullPath(b);
+
+        private static bool IsRunningNewerThanInstalled(string running)
+        {
+            var runningVersion = ReleaseVersion.Current();
+            var installedVersion = GetVersionOf(InstalledExePath);
+            // Couldn't determine the installed copy's version (corrupt, predates --version's current
+            // format, etc.) - treat it as older, i.e. go ahead and refresh it.
+            return installedVersion == null || runningVersion > installedVersion;
+        }
+
+        /// <summary>Runs `&lt;exePath&gt; --version` and parses a version out of its output, or null on
+        /// any failure (bad binary, timeout, ...) - a short-lived, best-effort check, not a hard dependency.</summary>
+        private static ReleaseVersion GetVersionOf(string exePath)
+        {
+            try {
+                var psi = new ProcessStartInfo(exePath, "--version") {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                };
+                using var process = Process.Start(psi);
+                if (process == null) {
+                    return null;
+                }
+
+                // Drain stdout concurrently with waiting - --version's output is tiny, but this avoids
+                // the classic deadlock if it weren't (child blocks writing to a full pipe nobody's reading).
+                var outputTask = process.StandardOutput.ReadToEndAsync();
+                if (!process.WaitForExit(3000) || !outputTask.Wait(1000)) {
+                    try { process.Kill(entireProcessTree: true); } catch (Exception) { /* best effort */ }
+                    return null;
+                }
+                return ReleaseVersion.Parse(outputTask.Result);
+            }
+            catch (Exception ex) {
+                _log.Debug(ex, $"Could not determine the version of the installed copy at {exePath}");
+                return null;
             }
         }
 

@@ -30,10 +30,21 @@ namespace Heroesprofile.Uploader.Linux
                 switch (command) {
                     case null:
                         ConfigureLoggingForCommand();
+                        // Very early: if an update was staged by a previous run, apply it and re-exec
+                        // before doing anything else - this launch should run the new binary, not the
+                        // one already loaded into memory. Only for the GUI/`run` paths (see Updater.cs).
+                        if (Updater.TryApplyAtStartup(args)) {
+                            return 0;
+                        }
+                        DesktopIntegration.RefreshInstalledCopyIfStale();
                         return Gui.Gui.Run(minimized: args.Contains("--minimized"));
 
                     case "run":
                         ConfigureLoggingForCommand();
+                        if (Updater.TryApplyAtStartup(args)) {
+                            return 0;
+                        }
+                        DesktopIntegration.RefreshInstalledCopyIfStale();
                         return RunCommand.Execute(prefixOverride).GetAwaiter().GetResult();
 
                     case "scan":
@@ -113,9 +124,13 @@ namespace Heroesprofile.Uploader.Linux
         {
             // What Uploader.cs actually sends as ?version= - it reads Assembly.GetExecutingAssembly()
             // from inside Common.dll, so this is Common's AssemblyVersion, not this exe's.
-            var version = typeof(Heroesprofile.Uploader.Common.ReplayLocation).Assembly.GetName().Version;
-            var appVersion = typeof(Program).Assembly.GetName().Version;
-            Console.WriteLine($"heroesprofile-uploader (Linux) {appVersion.ToString(3)} - Heroesprofile.Uploader.Common {version}");
+            var commonVersion = typeof(Heroesprofile.Uploader.Common.ReplayLocation).Assembly.GetName().Version;
+            // This build's own full version, prerelease suffix and all (e.g. "2.8.0-test.91" rather
+            // than a bare "2.8.0") - the plain AssemblyVersion can't tell two test builds of the same
+            // release apart (it drops the suffix), which both a human comparing `--version` output and
+            // DesktopIntegration.RefreshInstalledCopyIfStale (which parses this exact line) need to.
+            var appVersion = ReleaseVersion.Current();
+            Console.WriteLine($"heroesprofile-uploader (Linux) {appVersion} - Heroesprofile.Uploader.Common {commonVersion}");
         }
 
         private static void PrintHelp()
