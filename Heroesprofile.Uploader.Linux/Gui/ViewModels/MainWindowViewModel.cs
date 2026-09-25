@@ -74,6 +74,8 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
 
         public string RestartBannerText => "An update is downloaded and will be installed when you restart the uploader.";
 
+        public string VersionText => $"v{ReleaseVersion.Current()}";
+
         private readonly Updater _updater = new Updater();
         private bool _restarting;
 

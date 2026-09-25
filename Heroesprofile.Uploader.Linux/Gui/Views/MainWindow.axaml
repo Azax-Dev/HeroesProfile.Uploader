@@ -158,11 +158,15 @@
       <Border Grid.Row="3" Background="{DynamicResource AppBackgroundElevatedBrush}"
               BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0" Padding="12,8">
         <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Button Classes="btn" Content="Settings" Click="OpenSettings_Click" />
-            <Button Classes="btn" Content="Show log" Command="{Binding ShowLogCommand}" />
-            <Button Classes="btn" Content="Check for update" Command="{Binding CheckForUpdateCommand}" />
-          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Classes="btn" Content="Settings" Click="OpenSettings_Click" />
+              <Button Classes="btn" Content="Show log" Command="{Binding ShowLogCommand}" />
+              <Button Classes="btn" Content="Check for update" Command="{Binding CheckForUpdateCommand}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontSize="11" VerticalAlignment="Center"
+                       Foreground="{DynamicResource AppTextTertiaryBrush}" />
+          </Grid>
           <Button Classes="link-btn" Content="{Binding UpdateStatusText}" Command="{Binding OpenUpdateCommand}"
                   IsVisible="{Binding UpdateStatusText, Converter={x:Static conv:BoolConverters.NotEmpty}}" />
         </StackPanel>
