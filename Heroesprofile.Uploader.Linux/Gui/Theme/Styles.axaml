@@ -139,4 +139,11 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
   </Style>
+  <!-- Fluent paints a grey box behind a hovered/pressed button; keep links looking like text -->
+  <Style Selector="Button.link-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.link-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
 </Styles>
