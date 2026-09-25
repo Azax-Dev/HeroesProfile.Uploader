@@ -65,11 +65,15 @@
             <TextBlock Text="{Binding ErrorBannerText}" FontSize="11" Foreground="{DynamicResource AppAccentInkBrush}" />
           </Border>
 
-          <Border IsVisible="{Binding ShowRestartBanner}" Background="{DynamicResource AppRowAltBrush}"
+          <Border IsVisible="{Binding ShowRestartBanner}" Background="{DynamicResource AppAccentBrush}"
                   CornerRadius="4" Padding="8,5">
             <StackPanel Spacing="2">
-              <TextBlock Text="{Binding RestartBannerText}" FontSize="11" TextWrapping="Wrap" />
-              <Button Classes="link-btn" Content="Restart now." Click="RestartNow_Click" HorizontalAlignment="Left" />
+              <TextBlock Text="{Binding RestartBannerText}" FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource AppAccentInkBrush}" />
+              <Button Classes="link-btn" Click="RestartNow_Click" HorizontalAlignment="Left">
+                <TextBlock Text="Restart now." FontWeight="SemiBold" TextDecorations="Underline"
+                           Foreground="{DynamicResource AppAccentInkBrush}" />
+              </Button>
             </StackPanel>
           </Border>
 
