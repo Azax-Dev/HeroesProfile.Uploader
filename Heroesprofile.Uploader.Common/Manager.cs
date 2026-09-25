@@ -21,6 +21,11 @@ namespace Heroesprofile.Uploader.Common
         public const int MaxThreads = 1;
         //public const int MaxThreads = 1;
 
+        /// <summary>The two values <see cref="Status"/> takes - a named constant so callers compare
+        /// against these instead of hardcoding the strings themselves.</summary>
+        public const string UploadingStatus = "Uploading...";
+        public const string IdleStatus = "Idle";
+
         /// <summary>
         /// Replay list
         /// </summary>
@@ -342,7 +347,7 @@ namespace Heroesprofile.Uploader.Common
 
         private void RefreshStatusAndAggregates()
         {
-            _status = Files.Any(x => x.UploadStatus == UploadStatus.InProgress) ? "Uploading..." : "Idle";
+            _status = Files.Any(x => x.UploadStatus == UploadStatus.InProgress) ? UploadingStatus : IdleStatus;
             _aggregates = Files.GroupBy(x => x.UploadStatus).ToDictionary(x => x.Key, x => x.Count());
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Status)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Aggregates)));

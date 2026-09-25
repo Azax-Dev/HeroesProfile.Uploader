@@ -10,6 +10,10 @@ output=$(realpath -m "$2")
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../..")
 appimagetool_version=1.9.1
+# Pinned so a compromised/rewritten release download can't slip untrusted code into the AppImage
+# build. Verified against GitHub's own asset digest: `gh api repos/AppImage/appimagetool/releases/tags/1.9.1`
+# --jq '.assets[] | select(.name=="appimagetool-x86_64.AppImage") | .digest` reports the same sha256.
+appimagetool_sha256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -24,6 +28,7 @@ ln -s heroesprofile-uploader.png "$appdir/.DirIcon"
 
 tool="$work/appimagetool"
 curl -fsSL -o "$tool" "https://github.com/AppImage/appimagetool/releases/download/$appimagetool_version/appimagetool-x86_64.AppImage"
+echo "$appimagetool_sha256  $tool" | sha256sum -c -
 chmod +x "$tool"
 # Extract-and-run so building doesn't need FUSE either (CI runners don't have it).
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$tool" --no-appstream "$appdir" "$output"

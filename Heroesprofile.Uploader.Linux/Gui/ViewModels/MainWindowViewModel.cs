@@ -225,7 +225,8 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
             } else if (IsPaused) {
                 OverallStatusText = "Paused";
                 OverallStatusBrushKey = "AppTextSecondaryBrush";
-            } else if (Manager.Status == "Uploading...") {
+            } else if (Manager.Status == Heroesprofile.Uploader.Common.Manager.UploadingStatus) {
+                // Fully qualified: the "Manager" property on this class shadows the "Manager" type name.
                 OverallStatusText = "Uploading…";
                 OverallStatusBrushKey = "StatusProgressBrush";
             } else if (errorCount > 0) {

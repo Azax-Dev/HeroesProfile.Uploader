@@ -76,12 +76,34 @@ namespace Heroesprofile.Uploader.Linux
             }
         }
 
-        /// <summary>Writes this config back to <see cref="ConfigPath"/>, creating its folder if needed.</summary>
+        /// <summary>
+        /// Writes this config back to <see cref="ConfigPath"/>, creating its folder if needed. Contains
+        /// the Twitch uploader key in plain text (see <see cref="TwitchUploaderKey"/>), so the file is
+        /// created 0600 (no world/group read) with no window where it's briefly world-readable, and any
+        /// pre-existing file (created 0644 before this existed) is chmod'd back down to 0600 too.
+        /// </summary>
         public void Save()
         {
             var dir = Path.GetDirectoryName(ConfigPath);
             Directory.CreateDirectory(dir);
-            File.WriteAllText(ConfigPath, JsonConvert.SerializeObject(this, Formatting.Indented));
+
+            var json = JsonConvert.SerializeObject(this, Formatting.Indented);
+            // UnixCreateMode/SetUnixFileMode are Linux/Unix-only APIs (CA1416) - fine, this whole
+            // project only ever runs on Linux.
+#pragma warning disable CA1416
+            using (var stream = new FileStream(ConfigPath, new FileStreamOptions {
+                Mode = FileMode.Create,
+                Access = FileAccess.Write,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            }))
+            using (var writer = new StreamWriter(stream)) {
+                writer.Write(json);
+            }
+
+            // UnixCreateMode only takes effect when the file is actually created - a file that already
+            // existed (e.g. 0644 from before this code existed) keeps its old mode across FileMode.Create.
+            File.SetUnixFileMode(ConfigPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+#pragma warning restore CA1416
         }
     }
 }

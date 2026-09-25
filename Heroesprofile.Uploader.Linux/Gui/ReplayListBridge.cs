@@ -2,6 +2,7 @@ using Avalonia.Threading;
 using Heroesprofile.Uploader.Common;
 using Heroesprofile.Uploader.Linux.Gui.ViewModels;
 using NLog;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -53,7 +54,14 @@ namespace Heroesprofile.Uploader.Linux.Gui
                 case NotifyCollectionChangedAction.Add:
                     for (var i = 0; i < e.NewItems.Count; i++) {
                         var file = (ReplayFile)e.NewItems[i];
-                        Rows.Insert(e.NewStartingIndex + i, GetOrCreate(file));
+                        if (_byFile.ContainsKey(file)) {
+                            // Already have a row for it (e.g. a Rebuild() raced this same Add) - don't duplicate it.
+                            continue;
+                        }
+                        // Manager mutates Files from a background thread; by the time this Post'd handler
+                        // runs, more items may have arrived and NewStartingIndex may no longer be in range.
+                        var index = Math.Clamp(e.NewStartingIndex + i, 0, Rows.Count);
+                        Rows.Insert(index, GetOrCreate(file));
                     }
                     break;
 
@@ -76,10 +84,34 @@ namespace Heroesprofile.Uploader.Linux.Gui
 
         private void Rebuild()
         {
+            var snapshot = TakeSnapshot();
             _byFile.Clear();
             Rows.Clear();
-            foreach (var file in _manager.Files) {
+            foreach (var file in snapshot) {
                 Rows.Add(GetOrCreate(file));
+            }
+        }
+
+        /// <summary>
+        /// Manager.Files is an ObservableCollectionEx Manager mutates (Insert/AddRange) from its own
+        /// background threads with no lock - ObservableCollectionEx adds none, and Common shouldn't
+        /// grow one just for this. A plain `foreach` over it here can therefore race a mutation and
+        /// throw InvalidOperationException ("collection was modified"); retrying is safe and cheap -
+        /// worst case is redoing an in-memory copy a couple of times until nothing mutates mid-loop.
+        /// </summary>
+        private List<ReplayFile> TakeSnapshot()
+        {
+            while (true) {
+                try {
+                    var snapshot = new List<ReplayFile>();
+                    foreach (var file in _manager.Files) {
+                        snapshot.Add(file);
+                    }
+                    return snapshot;
+                }
+                catch (InvalidOperationException) {
+                    // Files changed mid-enumeration - try again.
+                }
             }
         }
 
