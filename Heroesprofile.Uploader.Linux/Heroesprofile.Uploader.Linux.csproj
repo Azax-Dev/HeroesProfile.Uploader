@@ -10,9 +10,14 @@
          which throws in invariant mode otherwise. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
-    <!-- Kept in step with the Windows app's AssemblyVersion; release.yml passes -p:Version from there.
-         "Check for update" compares this against the latest release that carries a Linux build. -->
-    <Version>2.8.0</Version>
+    <!-- Kept in step with the Windows app's AssemblyVersion by reading it straight out of its
+         AssemblyInfo.cs at evaluation time, so there's only one version number to remember to bump.
+         CI (release-linux.yml) still passes -p:Version=<x.y.z[-suffix]> explicitly for test builds;
+         a global property set that way always wins over this plain PropertyGroup assignment, so the
+         Condition below is really just "when nobody already told us the version". "Check for update"
+         (Updater.cs/ReleaseVersion.cs) compares this (via AssemblyInformationalVersion) against the
+         latest release that carries a Linux build. -->
+    <Version Condition="'$(Version)' == ''">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\Heroesprofile.Uploader.Windows\Properties\AssemblyInfo.cs')), 'AssemblyVersion\("(\d+\.\d+\.\d+)').Groups[1].Value)</Version>
     <!-- Publish as one file: Skia/HarfBuzz native libs are bundled and self-extracted on first run. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>

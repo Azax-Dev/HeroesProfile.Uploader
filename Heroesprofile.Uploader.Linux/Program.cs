@@ -24,7 +24,7 @@ namespace Heroesprofile.Uploader.Linux
 
             var prefixOverride = GetOptionValue(args, "--prefix");
             // The first non-flag argument is the subcommand; no args (or just "--minimized") means "launch the GUI".
-            var command = args.FirstOrDefault(a => !a.StartsWith("-", StringComparison.Ordinal));
+            var command = FindCommand(args);
 
             try {
                 switch (command) {
@@ -89,6 +89,24 @@ namespace Heroesprofile.Uploader.Linux
         {
             var index = Array.IndexOf(args, name);
             return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+        }
+
+        // Options that consume the following argument as their value - anything here must be skipped
+        // over (both the flag and its value) when scanning for the subcommand, or e.g.
+        // "--prefix /p run" would misread "/p" as the command instead of "run".
+        private static readonly string[] OptionsWithValues = { "--prefix" };
+
+        private static string FindCommand(string[] args)
+        {
+            for (var i = 0; i < args.Length; i++) {
+                if (!args[i].StartsWith("-", StringComparison.Ordinal)) {
+                    return args[i];
+                }
+                if (Array.IndexOf(OptionsWithValues, args[i]) >= 0) {
+                    i++; // skip this option's value too, not just the option itself
+                }
+            }
+            return null;
         }
 
         private static void PrintVersion()
