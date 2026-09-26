@@ -38,9 +38,7 @@ namespace Heroesprofile.Uploader.Linux
         /// Where this app can be launched from again later. Inside an AppImage, ProcessPath is the
         /// binary in a temporary mount that disappears on exit, so the .AppImage file itself is used.
         /// </summary>
-        private static string LaunchablePath => Environment.GetEnvironmentVariable("APPIMAGE") is string appImage && appImage != ""
-            ? appImage
-            : Environment.ProcessPath;
+        private static string LaunchablePath => Updater.RunningAppImage ?? Environment.ProcessPath;
 
         public static bool IsAppMenuEntryInstalled => File.Exists(DesktopEntryPath);
         private static string DesktopEntryPath => Path.Combine(DataHome, "applications", $"{AppId}.desktop");
@@ -74,9 +72,7 @@ namespace Heroesprofile.Uploader.Linux
             Directory.CreateDirectory(BinDir);
             // Already running the installed copy: just (re)write the menu entry and icon.
             if (Path.GetFullPath(sourceExePath) != Path.GetFullPath(InstalledExePath)) {
-                File.Copy(sourceExePath, InstalledExePath, overwrite: true);
-                MakeExecutable(InstalledExePath);
-                _log.Info($"Installed binary to {InstalledExePath}");
+                PlaceInstalledCopy(sourceExePath);
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(IconPath));
@@ -167,13 +163,58 @@ StartupWMClass={AppId}
                 return; // already running the installed copy
             }
 
-            if (!IsRunningNewerThanInstalled(running)) {
+            // Best effort - a failure here must never stop this (newer) binary from starting.
+            try {
+                if (IsRunningNewerThanInstalled(running)) {
+                    PlaceInstalledCopy(running);
+                }
+            }
+            catch (Exception ex) {
+                _log.Warn(ex, $"Could not refresh {InstalledExePath}");
+            }
+        }
+
+        /// <summary>
+        /// Puts a copy of <paramref name="source"/> at ~/.local/bin. If that copy is running (e.g. from
+        /// Start on login), Linux refuses to write to it ("Text file busy"), and renaming over it would
+        /// break it - single-file builds lazily load assemblies from their own path - so the new binary
+        /// is staged like a downloaded update instead, and applied the next time the installed copy starts.
+        /// </summary>
+        private static void PlaceInstalledCopy(string source)
+        {
+            if (File.Exists(InstalledExePath) && IsExecutableRunning(InstalledExePath)) {
+                Updater.StageLocalCopy(source, InstalledExePath, ReleaseVersion.Current());
+                _log.Info($"{InstalledExePath} is running - staged this version, it will be applied the next time that copy starts.");
                 return;
             }
 
-            File.Copy(running, InstalledExePath, overwrite: true);
-            MakeExecutable(InstalledExePath);
-            _log.Info($"Refreshed {InstalledExePath} from the newer binary currently running ({running}).");
+            // Copy next to it and rename over it, so a failed copy never leaves a truncated binary behind.
+            var tempPath = InstalledExePath + ".tmp";
+            try {
+                File.Copy(source, tempPath, overwrite: true);
+                MakeExecutable(tempPath);
+                File.Move(tempPath, InstalledExePath, overwrite: true);
+            }
+            catch {
+                if (File.Exists(tempPath)) {
+                    File.Delete(tempPath);
+                }
+                throw;
+            }
+            _log.Info($"Installed binary to {InstalledExePath}");
+        }
+
+        // Linux won't open an executable for writing while any process is running it (ETXTBSY). Opening
+        // without truncating or writing anything leaves the file untouched either way.
+        private static bool IsExecutableRunning(string path)
+        {
+            try {
+                using (File.OpenHandle(path, FileMode.Open, FileAccess.Write)) { }
+                return false;
+            }
+            catch (IOException) {
+                return true;
+            }
         }
 
         private static bool PathsEqual(string a, string b) => Path.GetFullPath(a) == Path.GetFullPath(b);
