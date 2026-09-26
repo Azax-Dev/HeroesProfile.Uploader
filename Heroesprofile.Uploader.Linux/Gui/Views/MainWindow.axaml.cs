@@ -73,6 +73,8 @@ namespace Heroesprofile.Uploader.Linux.Gui.Views
         /// <summary>Un-hides the window - the tray icon's "Open" item, or clicking the tray icon itself.</summary>
         public void RestoreFromTray()
         {
+            // Started with --minimized, the window was kept off the taskbar until now.
+            ShowInTaskbar = true;
             Show();
             WindowState = WindowState.Normal;
             Activate();

@@ -13,9 +13,10 @@ namespace Heroesprofile.Uploader.Linux.Gui
         }
 
         /// <summary>Runs the GUI to completion (blocks until the window/app exits) and returns its exit code.</summary>
-        public static int Run(bool minimized)
+        internal static int Run(bool minimized, SingleInstance instance)
         {
             App.StartMinimized = minimized;
+            App.Instance = instance;
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(minimized ? new[] { "--minimized" } : System.Array.Empty<string>());
         }
     }

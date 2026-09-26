@@ -6,14 +6,20 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Heroesprofile.Uploader.Linux.Gui.ViewModels;
 using Heroesprofile.Uploader.Linux.Gui.Views;
+using NLog;
 using System;
 
 namespace Heroesprofile.Uploader.Linux.Gui
 {
     public partial class App : Application
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         /// <summary>Set by <see cref="Gui.Run"/> before the framework initialization event fires.</summary>
         public static bool StartMinimized { get; set; }
+
+        /// <summary>Set by <see cref="Gui.Run"/>; another launch asks through it for this window to be shown.</summary>
+        internal static SingleInstance Instance { get; set; }
 
         private MainWindowViewModel _viewModel;
         private MainWindow _window;
@@ -54,6 +60,13 @@ namespace Heroesprofile.Uploader.Linux.Gui
                 };
 
                 desktop.Exit += (_, __) => _viewModel.Manager?.Stop();
+
+                if (Instance != null) {
+                    Instance.ActivationRequested += () => Dispatcher.UIThread.Post(() => {
+                        _log.Info("Another launch asked for this window - showing it.");
+                        _window.RestoreFromTray();
+                    });
+                }
 
                 if (StartMinimized && _viewModel.Config.MinimizeToTray) {
                     // Never shown at all - straight to the tray, like the Windows app's --autorun.

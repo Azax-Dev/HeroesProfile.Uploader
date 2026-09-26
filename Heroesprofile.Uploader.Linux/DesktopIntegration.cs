@@ -73,6 +73,8 @@ namespace Heroesprofile.Uploader.Linux
             // Already running the installed copy: just (re)write the menu entry and icon.
             if (Path.GetFullPath(sourceExePath) != Path.GetFullPath(InstalledExePath)) {
                 PlaceInstalledCopy(sourceExePath);
+            } else {
+                CancelPendingDelete();
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(IconPath));
@@ -100,7 +102,54 @@ namespace Heroesprofile.Uploader.Linux
         {
             DeleteIfExists(DesktopEntryPath);
             DeleteIfExists(IconPath);
-            DeleteIfExists(InstalledExePath);
+            DeleteIfExists(InstalledExePath + ".new");
+            DeleteIfExists(InstalledExePath + ".new.sha256");
+            if (IsRunningInstalledCopy) {
+                DeleteAfterExit(InstalledExePath);
+            } else {
+                DeleteIfExists(InstalledExePath);
+            }
+        }
+
+        /// <summary>True when this process is the ~/.local/bin copy.</summary>
+        public static bool IsRunningInstalledCopy =>
+            !string.IsNullOrEmpty(Environment.ProcessPath) && PathsEqual(Environment.ProcessPath, InstalledExePath);
+
+        private static Process _pendingDelete;
+
+        /// <summary>
+        /// Deleting the running binary would crash this process later - a single-file build loads parts
+        /// of itself from its own path as it goes - so a detached shell deletes it once this process exits.
+        /// </summary>
+        private static void DeleteAfterExit(string path)
+        {
+            CancelPendingDelete();
+            // $1=our pid, $2=path. Positional parameters only - never interpolate the path into the script.
+            var psi = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add("while kill -0 \"$1\" 2>/dev/null; do sleep 1; done; rm -f -- \"$2\"");
+            psi.ArgumentList.Add("sh");
+            psi.ArgumentList.Add(Environment.ProcessId.ToString());
+            psi.ArgumentList.Add(path);
+            _pendingDelete = Process.Start(psi);
+            _log.Info($"Will remove {path} when this instance exits");
+        }
+
+        // "Show in app menu" turned back on before exiting - keep the binary after all.
+        private static void CancelPendingDelete()
+        {
+            if (_pendingDelete == null) {
+                return;
+            }
+            try {
+                if (!_pendingDelete.HasExited) {
+                    _pendingDelete.Kill();
+                }
+            }
+            catch (Exception ex) {
+                _log.Debug(ex, "Could not cancel the pending delete");
+            }
+            _pendingDelete = null;
         }
 
         /// <summary>Writes or removes the XDG autostart entry for Settings' "Start on login" toggle.</summary>
@@ -113,7 +162,7 @@ namespace Heroesprofile.Uploader.Linux
 
             // Prefer the installed copy so autostart survives the source binary moving/disappearing;
             // fall back to wherever we're currently running from (e.g. testing before `install`).
-            var exePath = File.Exists(InstalledExePath) ? InstalledExePath : LaunchablePath;
+            var exePath = File.Exists(InstalledExePath) && _pendingDelete == null ? InstalledExePath : LaunchablePath;
             Directory.CreateDirectory(Path.GetDirectoryName(AutostartEntryPath));
             File.WriteAllText(AutostartEntryPath, DesktopEntryContents(exePath, minimized: true));
             _log.Info($"Wrote autostart entry {AutostartEntryPath}");
