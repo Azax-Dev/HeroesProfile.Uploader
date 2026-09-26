@@ -82,16 +82,32 @@ namespace Heroesprofile.Uploader.Linux
                 new StageResult { Outcome = outcome, Version = release?.Version, ReleaseUrl = release?.HtmlUrl, Reason = reason };
         }
 
-        /// <summary>Where a staged/applied update targets: $APPIMAGE if set, otherwise the running executable's own path.</summary>
+        /// <summary>
+        /// The .AppImage file this process was launched from, or null if it wasn't. The AppImage runtime
+        /// sets $APPIMAGE and $APPDIR (its mount point) for the app, but child processes inherit both -
+        /// so a tarball binary started from, say, a terminal that is itself an AppImage sees that other
+        /// app's $APPIMAGE. Only trust it when this executable actually lives inside $APPDIR.
+        /// </summary>
+        public static string RunningAppImage
+        {
+            get {
+                var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
+                var appDir = Environment.GetEnvironmentVariable("APPDIR");
+                var exe = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(appImage) || string.IsNullOrEmpty(appDir) || string.IsNullOrEmpty(exe)) {
+                    return null;
+                }
+                var mount = Path.TrimEndingDirectorySeparator(Path.GetFullPath(appDir)) + Path.DirectorySeparatorChar;
+                return Path.GetFullPath(exe).StartsWith(mount, StringComparison.Ordinal) ? appImage : null;
+            }
+        }
+
+        /// <summary>Where a staged/applied update targets: the running AppImage if there is one, otherwise the running executable's own path.</summary>
         public static string ResolveTarget(out bool isAppImage)
         {
-            var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
-            if (!string.IsNullOrEmpty(appImage)) {
-                isAppImage = true;
-                return appImage;
-            }
-            isAppImage = false;
-            return Environment.ProcessPath;
+            var appImage = RunningAppImage;
+            isAppImage = appImage != null;
+            return appImage ?? Environment.ProcessPath;
         }
 
         /// <summary>
@@ -295,6 +311,30 @@ namespace Heroesprofile.Uploader.Linux
             }
         }
 
+        /// <summary>
+        /// Stages a local binary as "&lt;target&gt;.new", the same way a downloaded update is staged, so
+        /// the next launch of <paramref name="target"/> applies it. Used when the target can't be
+        /// replaced right now because it's running. Does nothing if a newer version is already staged.
+        /// </summary>
+        public static void StageLocalCopy(string sourcePath, string target, ReleaseVersion version)
+        {
+            var newPath = target + ".new";
+            var metaPath = newPath + ".sha256";
+            if (File.Exists(newPath) && TryReadStagedMeta(metaPath, out var stagedHash, out var stagedVersion) &&
+                stagedVersion != null && !(version > stagedVersion) && VerifyFile(newPath, stagedHash)) {
+                return;
+            }
+            try {
+                File.Copy(sourcePath, newPath, overwrite: true);
+                WriteStagedMeta(metaPath, ComputeSha256(newPath), version);
+            }
+            catch {
+                TryDelete(newPath);
+                TryDelete(metaPath);
+                throw;
+            }
+        }
+
         private static void WriteStagedMeta(string metaPath, string hash, ReleaseVersion version) =>
             File.WriteAllText(metaPath, $"{hash}\n{version}\n");
 
@@ -405,7 +445,8 @@ namespace Heroesprofile.Uploader.Linux
         /// The script only ever uses positional parameters ($1, $2, "$@") - never string-interpolate a
         /// path or arg into the script text itself. If the "mv" fails (e.g. a permissions change), the
         /// script still execs the (unmoved) target, so the app keeps working on the old version.
-        /// A failed/missing verification discards the staged files and launches nothing.
+        /// A failed/missing verification, or a staged version no newer than this build, discards the
+        /// staged files and launches nothing.
         /// </summary>
         private static bool ApplyStagedInPlace(string target, string[] childArgs, out string error)
         {
@@ -413,8 +454,16 @@ namespace Heroesprofile.Uploader.Linux
             var newPath = target + ".new";
             var metaPath = newPath + ".sha256";
 
-            if (!TryReadStagedMeta(metaPath, out var hash, out _) || !VerifyFile(newPath, hash)) {
+            if (!TryReadStagedMeta(metaPath, out var hash, out var stagedVersion) || !VerifyFile(newPath, hash)) {
                 error = "staged update failed verification - discarding it.";
+                TryDelete(newPath);
+                TryDelete(metaPath);
+                return false;
+            }
+
+            // Left over from before the target was replaced some other way (e.g. `install` of a newer build).
+            if (stagedVersion != null && !(stagedVersion > ReleaseVersion.Current())) {
+                error = $"staged update {stagedVersion} is not newer than this build - discarding it.";
                 TryDelete(newPath);
                 TryDelete(metaPath);
                 return false;

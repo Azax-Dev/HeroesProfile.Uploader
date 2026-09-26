@@ -32,7 +32,9 @@ namespace Heroesprofile.Uploader.Linux
                         ConfigureLoggingForCommand();
                         // Very early: if an update was staged by a previous run, apply it and re-exec
                         // before doing anything else - this launch should run the new binary, not the
-                        // one already loaded into memory. Only for the GUI/`run` paths (see Updater.cs).
+                        // one already loaded into memory. GUI only: `run` never applies staged updates,
+                        // since under systemd the detached swap step would be killed along with the unit
+                        // when this process exits.
                         if (Updater.TryApplyAtStartup(args)) {
                             return 0;
                         }
@@ -41,9 +43,6 @@ namespace Heroesprofile.Uploader.Linux
 
                     case "run":
                         ConfigureLoggingForCommand();
-                        if (Updater.TryApplyAtStartup(args)) {
-                            return 0;
-                        }
                         DesktopIntegration.RefreshInstalledCopyIfStale();
                         return RunCommand.Execute(prefixOverride).GetAwaiter().GetResult();
 
