@@ -328,8 +328,13 @@ namespace Heroesprofile.Uploader.Linux.Gui.ViewModels
                     DesktopIntegration.RemoveAppMenuEntry();
                 }
                 // The autostart entry points at the ~/.local/bin copy when there is one, so rewrite
-                // it to follow that copy appearing or going away.
-                if (StartOnLogin) {
+                // it to follow that copy appearing or going away. If this *is* that copy, nothing
+                // would be left to start at login, so turn Start on login off instead.
+                if (StartOnLogin && !value && DesktopIntegration.IsRunningInstalledCopy) {
+                    _log.Warn("Removed from the app menu while running from it - turning off Start on login too.");
+                    StartOnLogin = false;
+                }
+                else if (StartOnLogin) {
                     DesktopIntegration.SetStartOnLogin(true);
                 }
             }

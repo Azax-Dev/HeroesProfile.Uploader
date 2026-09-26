@@ -28,8 +28,16 @@ namespace Heroesprofile.Uploader.Linux
 
             try {
                 switch (command) {
-                    case null:
+                    case null: {
                         ConfigureLoggingForCommand();
+                        // Before applying a staged update: a second launch must not swap the binary
+                        // out from under the instance that's already running.
+                        using var instance = SingleInstance.TryAcquire(
+                            waitForPrevious: Environment.GetEnvironmentVariable("HP_UPDATER_APPLIED") == "1");
+                        if (instance == null) {
+                            Console.WriteLine("Heroes Profile Uploader is already running - showing its window.");
+                            return 0;
+                        }
                         // Very early: if an update was staged by a previous run, apply it and re-exec
                         // before doing anything else - this launch should run the new binary, not the
                         // one already loaded into memory. GUI only: `run` never applies staged updates,
@@ -39,7 +47,8 @@ namespace Heroesprofile.Uploader.Linux
                             return 0;
                         }
                         DesktopIntegration.RefreshInstalledCopyIfStale();
-                        return Gui.Gui.Run(minimized: args.Contains("--minimized"));
+                        return Gui.Gui.Run(minimized: args.Contains("--minimized"), instance);
+                    }
 
                     case "run":
                         ConfigureLoggingForCommand();
